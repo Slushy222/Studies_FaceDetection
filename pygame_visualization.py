@@ -7,12 +7,31 @@ import random
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-GRID_COLOR = (225, 225, 225) #220, 220, 220 for light gray
+GRID_COLOR = WHITE #220, 220, 220 for light gray
+
+
+# Old Code Below, for not rolling over cells
+
+# def find_random_empty_position(grid, grid_width, grid_height):
+#     """
+#     Find a random empty position in the grid.
+#     Returns a tuple (x, y) of coordinates, or None if no empty positions exist.
+#     """
+#     empty_positions = []
+#     for y in range(grid_height):
+#         for x in range(grid_width):
+#             if grid[y][x] is None:
+#                 empty_positions.append((x, y))
+    
+#     if empty_positions:
+#         return random.choice(empty_positions)
+#     return None
 
 def find_random_empty_position(grid, grid_width, grid_height):
     """
     Find a random empty position in the grid.
-    Returns a tuple (x, y) of coordinates, or None if no empty positions exist.
+    If grid is full, clear all non-permanent cells and return a random position.
+    Returns a tuple (x, y) of coordinates.
     """
     empty_positions = []
     for y in range(grid_height):
@@ -22,7 +41,22 @@ def find_random_empty_position(grid, grid_width, grid_height):
     
     if empty_positions:
         return random.choice(empty_positions)
-    return None
+    else:
+        # Grid is full, clear all non-permanent cells
+        for y in range(grid_height):
+            for x in range(grid_width):
+                if grid[y][x] is not None and not grid[y][x].permanent:
+                    grid[y][x] = None
+        
+        # Now find a new random empty position from the cleared grid
+        new_empty_positions = []
+        for y in range(grid_height):
+            for x in range(grid_width):
+                if grid[y][x] is None:
+                    new_empty_positions.append((x, y))
+        
+        return random.choice(new_empty_positions) if new_empty_positions else None
+
 
 class Cell:
     def __init__(self, grid_x, grid_y, class_id):
@@ -122,7 +156,9 @@ def run_visualization(detection_queue, person_detected_queue):
         grid_height = height // cell_size
         
         screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
-        pygame.display.set_caption("Cellular Automaton Grid")
+        icon = pygame.image.load('black-icon-01.png')
+        pygame.display.set_icon(icon)
+        pygame.display.set_caption("to mature")
         print("Pygame window created.")
 
         # Initialize empty grid

@@ -4,6 +4,7 @@ import numpy as np
 from queue import Queue, Empty
 import time
 
+
 def ascii_art(image, cols=120, scale=0.43):
     char_list = ['@', '#', 'S', '%', '?', '*', '+', ';', ':', ',', '.']
     
@@ -48,7 +49,9 @@ def run_ascii_window(frame_queue, person_detected_queue):
         if person_detected:
             if screen is None:
                 screen = pygame.display.set_mode((width, height))
-                pygame.display.set_caption("ASCII Webcam Filter")
+                pygame.display.set_caption("to have")
+                icon = pygame.image.load('red-icon-01.png')
+                pygame.display.set_icon(icon)
                 ascii_start_time = current_time
             last_person_detection_time = current_time
             ascii_duration = max(ascii_duration, (current_time - ascii_start_time) + 3)  # Add 3 seconds to the duration
