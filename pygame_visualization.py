@@ -7,31 +7,13 @@ import random
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-GRID_COLOR = WHITE #220, 220, 220 for light gray
+GRID_COLOR = WHITE
 
-
-# Old Code Below, for not rolling over cells
-
-# def find_random_empty_position(grid, grid_width, grid_height):
-#     """
-#     Find a random empty position in the grid.
-#     Returns a tuple (x, y) of coordinates, or None if no empty positions exist.
-#     """
-#     empty_positions = []
-#     for y in range(grid_height):
-#         for x in range(grid_width):
-#             if grid[y][x] is None:
-#                 empty_positions.append((x, y))
-    
-#     if empty_positions:
-#         return random.choice(empty_positions)
-#     return None
-
-def find_random_empty_position(grid, grid_width, grid_height):
+def find_random_empty_position(grid, grid_width, grid_height, last_full_time):
     """
     Find a random empty position in the grid.
-    If grid is full, clear all non-permanent cells and return a random position.
-    Returns a tuple (x, y) of coordinates.
+    If grid is full, wait 30 seconds before clearing non-permanent cells.
+    Returns a tuple (x, y) of coordinates and the updated last_full_time.
     """
     empty_positions = []
     for y in range(grid_height):
@@ -40,23 +22,32 @@ def find_random_empty_position(grid, grid_width, grid_height):
                 empty_positions.append((x, y))
     
     if empty_positions:
-        return random.choice(empty_positions)
+        return random.choice(empty_positions), None
     else:
-        # Grid is full, clear all non-permanent cells
+        current_time = time.time()
+        
+        # If this is the first time we've found the grid full, record the time
+        if last_full_time is None:
+            return None, current_time
+        
+        # If 30 seconds haven't passed since the grid became full, return None
+        if current_time - last_full_time < 30:
+            return None, last_full_time
+        
+        # 30 seconds have passed, clear the grid
         for y in range(grid_height):
             for x in range(grid_width):
                 if grid[y][x] is not None and not grid[y][x].permanent:
                     grid[y][x] = None
         
-        # Now find a new random empty position from the cleared grid
+        # Find a new random empty position from the cleared grid
         new_empty_positions = []
         for y in range(grid_height):
             for x in range(grid_width):
                 if grid[y][x] is None:
                     new_empty_positions.append((x, y))
         
-        return random.choice(new_empty_positions) if new_empty_positions else None
-
+        return (random.choice(new_empty_positions) if new_empty_positions else None), None
 
 class Cell:
     def __init__(self, grid_x, grid_y, class_id):
@@ -149,7 +140,12 @@ def run_visualization(detection_queue, person_detected_queue):
         pygame.init()
         print("Pygame initialized.")
 
-        # Set up display
+        # Get the current display info
+        info = pygame.display.Info()
+        monitor_width = info.current_w
+        monitor_height = info.current_h
+
+        # Set up initial window
         width, height = 800, 600
         cell_size = 8
         grid_width = width // cell_size
@@ -161,8 +157,15 @@ def run_visualization(detection_queue, person_detected_queue):
         pygame.display.set_caption("to mature")
         print("Pygame window created.")
 
+        # Track fullscreen state
+        is_fullscreen = False
+        windowed_size = (width, height)
+
         # Initialize empty grid
         grid = [[None for x in range(grid_width)] for y in range(grid_height)]
+        
+        # Initialize last_full_time
+        last_full_time = None
         
         clock = pygame.time.Clock()
         last_detection_time = {}
@@ -184,7 +187,36 @@ def run_visualization(detection_queue, person_detected_queue):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.VIDEORESIZE:
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_f:  # F key pressed
+                        is_fullscreen = not is_fullscreen
+                        if is_fullscreen:
+                            # Store current window size before going fullscreen
+                            windowed_size = (width, height)
+                            screen = pygame.display.set_mode((monitor_width, monitor_height), pygame.FULLSCREEN)
+                            width, height = monitor_width, monitor_height
+                        else:
+                            # Restore previous window size
+                            width, height = windowed_size
+                            screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
+                        
+                        # Update grid dimensions
+                        new_grid_width = width // cell_size
+                        new_grid_height = height // cell_size
+                        new_grid = [[None for x in range(new_grid_width)] for y in range(new_grid_height)]
+                        
+                        for y in range(min(len(grid), new_grid_height)):
+                            for x in range(min(len(grid[0]), new_grid_width)):
+                                new_grid[y][x] = grid[y][x]
+                                if new_grid[y][x] is not None:
+                                    new_grid[y][x].grid_x = x
+                                    new_grid[y][x].grid_y = y
+                        
+                        grid = new_grid
+                        grid_width = new_grid_width
+                        grid_height = new_grid_height
+                        
+                elif event.type == pygame.VIDEORESIZE and not is_fullscreen:
                     width, height = event.size
                     screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
                     new_grid_width = width // cell_size
@@ -212,7 +244,10 @@ def run_visualization(detection_queue, person_detected_queue):
                         person_detected_queue.put(True)
                     
                     # Find random empty position
-                    position = find_random_empty_position(grid, grid_width, grid_height)
+                    position, new_last_full_time = find_random_empty_position(grid, grid_width, grid_height, last_full_time)
+                    if new_last_full_time is not None:
+                        last_full_time = new_last_full_time
+                    
                     if position:
                         x, y = position
                         new_cell = Cell(x, y, obj.class_id)
