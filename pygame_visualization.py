@@ -167,6 +167,11 @@ def run_visualization(detection_queue, person_detected_queue):
         # Initialize last_full_time
         last_full_time = None
         
+        # Initialize batching variables
+        detection_buffer = []
+        last_batch_process_time = time.time()
+        batch_interval = 1.0  # Adjust this value to control how often cells are placed (in seconds)
+        
         clock = pygame.time.Clock()
         last_detection_time = {}
         detection_timeout = 1.0
@@ -235,23 +240,33 @@ def run_visualization(detection_queue, person_detected_queue):
                     grid_width = new_grid_width
                     grid_height = new_grid_height
 
-            # Process detection queue
+            # Process detection queue into buffer
             while not detection_queue.empty():
                 detected_objects = detection_queue.get()
+                detection_buffer.extend(detected_objects)
+
+            # Process single detection from buffer at intervals
+            current_time = time.time()
+            if current_time - last_batch_process_time >= batch_interval and detection_buffer:
+                # Process just one detection from the buffer
+                obj = random.choice(detection_buffer)
                 
-                for obj in detected_objects:
-                    if obj.class_id == 0:  # Person detection
-                        person_detected_queue.put(True)
-                    
-                    # Find random empty position
-                    position, new_last_full_time = find_random_empty_position(grid, grid_width, grid_height, last_full_time)
-                    if new_last_full_time is not None:
-                        last_full_time = new_last_full_time
-                    
-                    if position:
-                        x, y = position
-                        new_cell = Cell(x, y, obj.class_id)
-                        grid[y][x] = new_cell
+                if obj.class_id == 0:  # Person detection
+                    person_detected_queue.put(True)
+                
+                position, new_last_full_time = find_random_empty_position(grid, grid_width, grid_height, last_full_time)
+                if new_last_full_time is not None:
+                    last_full_time = new_last_full_time
+                
+                if position:
+                    x, y = position
+                    new_cell = Cell(x, y, obj.class_id)
+                    grid[y][x] = new_cell
+                
+                # Remove the processed detection from buffer
+                detection_buffer.remove(obj)
+                
+                last_batch_process_time = current_time
 
             # Update cellular automaton based on interval
             current_tick = pygame.time.get_ticks()
